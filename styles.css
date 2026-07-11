@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>คำต้องห้าม Online</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <section id="homeView" class="panel hero">
+      <div class="logo">💬💀</div>
+      <p class="eyebrow">เกมปาร์ตี้ออนไลน์</p>
+      <h1>คำต้องห้าม</h1>
+      <p class="subtitle">มองเห็นคำของคนอื่น แต่ห้ามรู้คำของตัวเอง หลอกให้เพื่อนพูดแล้วกด Kill!</p>
+
+      <label>ชื่อของคุณ</label>
+      <input id="nameInput" maxlength="20" placeholder="เช่น ณภัทร์" autocomplete="off" />
+
+      <button id="createBtn" class="primary">สร้างห้อง</button>
+      <div class="divider"><span>หรือ</span></div>
+      <div class="join-row">
+        <input id="roomCodeInput" maxlength="5" placeholder="รหัสห้อง" autocomplete="off" />
+        <button id="joinBtn">เข้าห้อง</button>
+      </div>
+      <p id="homeError" class="error"></p>
+    </section>
+
+    <section id="roomView" class="hidden">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">รหัสห้อง</p>
+          <button id="copyCodeBtn" class="room-code" title="กดเพื่อคัดลอก">-----</button>
+        </div>
+        <div class="timer-box"><span>⏱️</span><strong id="timerText">02:00</strong></div>
+      </header>
+
+      <section class="panel settings" id="settingsPanel">
+        <h2>ตั้งค่ารอบ</h2>
+        <div class="settings-grid">
+          <label>หมวดคำ
+            <select id="categorySelect">
+              <option>สัตว์</option><option>อาหาร</option><option>สิ่งของ</option><option>กีฬา</option><option>อาชีพ</option>
+            </select>
+          </label>
+          <label>เวลา
+            <select id="durationSelect">
+              <option value="60">1 นาที</option>
+              <option value="120" selected>2 นาที</option>
+              <option value="180">3 นาที</option>
+              <option value="300">5 นาที</option>
+            </select>
+          </label>
+        </div>
+        <button id="startBtn" class="primary">เริ่มเกม</button>
+        <button id="resetBtn" class="hidden">กลับเข้าห้องรอ</button>
+        <p id="roomError" class="error"></p>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>ผู้เล่น</h2>
+          <span id="playerCount" class="badge">0 คน</span>
+        </div>
+        <div id="playerList" class="player-list"></div>
+      </section>
+
+      <section id="gamePanel" class="panel hidden">
+        <div class="section-title">
+          <div><p class="eyebrow">หมวด</p><h2 id="gameCategory">สัตว์</h2></div>
+          <span class="badge danger">อย่าพูดคำตัวเอง</span>
+        </div>
+        <div id="gameCards" class="game-grid"></div>
+      </section>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

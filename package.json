@@ -1,0 +1,155 @@
+const socket = io();
+
+const $ = (id) => document.getElementById(id);
+const els = {
+  homeView: $('homeView'), roomView: $('roomView'), nameInput: $('nameInput'), roomCodeInput: $('roomCodeInput'),
+  createBtn: $('createBtn'), joinBtn: $('joinBtn'), homeError: $('homeError'), copyCodeBtn: $('copyCodeBtn'),
+  timerText: $('timerText'), settingsPanel: $('settingsPanel'), categorySelect: $('categorySelect'), durationSelect: $('durationSelect'),
+  startBtn: $('startBtn'), resetBtn: $('resetBtn'), roomError: $('roomError'), playerList: $('playerList'), playerCount: $('playerCount'),
+  gamePanel: $('gamePanel'), gameCategory: $('gameCategory'), gameCards: $('gameCards'), toast: $('toast')
+};
+
+let playerId = null;
+let room = null;
+let toastTimer = null;
+
+function showToast(message) {
+  els.toast.textContent = message;
+  els.toast.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => els.toast.classList.add('hidden'), 3200);
+}
+
+function formatTime(total) {
+  const seconds = Math.max(0, Number(total) || 0);
+  return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function enterRoom(data) {
+  playerId = data.playerId;
+  room = data.room;
+  els.homeView.classList.add('hidden');
+  els.roomView.classList.remove('hidden');
+  renderRoom();
+}
+
+function renderRoom() {
+  if (!room) return;
+  const isHost = room.hostId === playerId;
+  els.copyCodeBtn.textContent = room.code;
+  els.timerText.textContent = formatTime(room.secondsLeft);
+  els.categorySelect.value = room.category;
+  els.durationSelect.value = String(room.duration);
+  els.categorySelect.disabled = !isHost || room.status === 'playing';
+  els.durationSelect.disabled = !isHost || room.status === 'playing';
+  els.startBtn.classList.toggle('hidden', !isHost || room.status === 'playing');
+  els.resetBtn.classList.toggle('hidden', !isHost || room.status !== 'ended');
+  els.startBtn.textContent = room.status === 'ended' ? 'เริ่มรอบใหม่' : 'เริ่มเกม';
+  els.playerCount.textContent = `${room.players.length} คน`;
+
+  els.playerList.innerHTML = room.players.map((p) => `
+    <div class="player-row">
+      <div class="player-main">
+        <div class="avatar">${escapeHtml(p.name.slice(0, 1).toUpperCase())}</div>
+        <div><strong>${escapeHtml(p.name)} ${p.id === room.hostId ? '👑' : ''}</strong>
+          <div class="player-meta">${p.id === playerId ? 'คุณ · ' : ''}${p.alive ? 'ยังอยู่ในเกม' : 'ตกรอบแล้ว'}</div>
+        </div>
+      </div>
+      <strong>${p.score} คะแนน</strong>
+    </div>
+  `).join('');
+
+  if (room.status !== 'playing') {
+    els.gamePanel.classList.add('hidden');
+  }
+}
+
+function renderGame(view) {
+  els.gamePanel.classList.remove('hidden');
+  els.gameCategory.textContent = view.category;
+  els.timerText.textContent = formatTime(view.secondsLeft);
+  els.gameCards.innerHTML = view.players.map((p) => {
+    const isSelf = p.id === playerId;
+    return `
+      <article class="game-card ${isSelf ? 'self' : ''} ${p.alive ? '' : 'out'}">
+        ${p.alive ? '' : '<span class="out-stamp">OUT</span>'}
+        <p class="eyebrow">${isSelf ? 'คำของคุณ' : escapeHtml(p.name)}</p>
+        <div class="word">${isSelf ? '❓❓❓' : escapeHtml(p.word || '-')}</div>
+        <div class="player-meta">คะแนน ${p.score}</div>
+        ${!isSelf && p.alive ? `<button class="kill-btn" data-kill="${p.id}">💀 KILL ${escapeHtml(p.name)}</button>` : ''}
+      </article>`;
+  }).join('');
+
+  document.querySelectorAll('[data-kill]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const target = view.players.find((p) => p.id === button.dataset.kill);
+      if (!target || !confirm(`ยืนยันว่า ${target.name} พูดคำของตัวเองแล้ว?`)) return;
+      socket.emit('player:kill', { targetId: target.id }, (result) => {
+        if (!result?.ok) showToast(result?.error || 'กด Kill ไม่สำเร็จ');
+      });
+    });
+  });
+}
+
+function escapeHtml(text) {
+  return String(text).replace(/[&<>'"]/g, (char) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
+}
+
+function sendSettings() {
+  if (!room || room.hostId !== playerId) return;
+  socket.emit('room:settings', {
+    category: els.categorySelect.value,
+    duration: Number(els.durationSelect.value)
+  }, (result) => {
+    if (!result?.ok) els.roomError.textContent = result?.error || 'บันทึกไม่ได้';
+  });
+}
+
+els.createBtn.addEventListener('click', () => {
+  els.homeError.textContent = '';
+  socket.emit('room:create', { name: els.nameInput.value }, (result) => {
+    if (!result?.ok) return els.homeError.textContent = result?.error || 'สร้างห้องไม่สำเร็จ';
+    enterRoom(result);
+  });
+});
+
+els.joinBtn.addEventListener('click', () => {
+  els.homeError.textContent = '';
+  socket.emit('room:join', { code: els.roomCodeInput.value, name: els.nameInput.value }, (result) => {
+    if (!result?.ok) return els.homeError.textContent = result?.error || 'เข้าห้องไม่สำเร็จ';
+    enterRoom(result);
+  });
+});
+
+els.roomCodeInput.addEventListener('input', (e) => e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''));
+els.categorySelect.addEventListener('change', sendSettings);
+els.durationSelect.addEventListener('change', sendSettings);
+
+els.copyCodeBtn.addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(room.code); showToast('คัดลอกรหัสห้องแล้ว'); }
+  catch { showToast(`รหัสห้อง: ${room.code}`); }
+});
+
+els.startBtn.addEventListener('click', () => {
+  els.roomError.textContent = '';
+  sendSettings();
+  socket.emit('round:start', {}, (result) => {
+    if (!result?.ok) els.roomError.textContent = result?.error || 'เริ่มเกมไม่ได้';
+  });
+});
+
+els.resetBtn.addEventListener('click', () => {
+  socket.emit('round:reset', {}, (result) => {
+    if (!result?.ok) showToast(result?.error || 'รีเซ็ตไม่ได้');
+  });
+});
+
+socket.on('room:update', (nextRoom) => { room = nextRoom; renderRoom(); });
+socket.on('game:view', renderGame);
+socket.on('timer:update', (seconds) => els.timerText.textContent = formatTime(seconds));
+socket.on('round:started', () => showToast('เริ่มรอบแล้ว! หลอกให้เพื่อนพูดคำของตัวเอง'));
+socket.on('player:killed', ({ killerName, targetName, targetWord }) => showToast(`${killerName} Kill ${targetName} สำเร็จ! คำคือ “${targetWord}”`));
+socket.on('round:ended', ({ reason, winners }) => {
+  const names = winners.map((w) => `${w.name} (${w.score} คะแนน)`).join(', ');
+  showToast(`จบรอบ: ${reason} · ผู้ชนะ ${names}`);
+});
